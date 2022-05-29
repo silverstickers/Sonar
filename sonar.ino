@@ -1,11 +1,11 @@
 #define MY_SERIAL SerialUSB
 
 constexpr size_t g_pinToSamex[10] = {7, 6, 5, 4, 3, 2, 1, 0, 10, 11}; // Pin A0 -> A9 are named differently in the CPU
-constexpr uint32_t g_enabledPins [] = {7, 6};
+constexpr uint32_t g_enabledPins [] = {7, 6, 5, 4};
 constexpr size_t g_numEnabledPins = sizeof(g_enabledPins)/sizeof(*g_enabledPins);
 uint32_t g_enabledPinsBinary = 0;
-
-constexpr size_t g_samplesPerPin = 8000 / g_numEnabledPins / 1; // 16 ms total sample time, divided over g_numEnabledPins and with 1 µs sample time per sample
+constexpr size_t g_usPerSample = 1;
+constexpr size_t g_samplesPerPin = 8000 / g_numEnabledPins / g_usPerSample; // total sample time, divided over g_numEnabledPins and with 1 µs sample time per sample
 
 
 #define CYCLES_PER_LOOP 3
@@ -16,14 +16,23 @@ inline void wait_cycles( uint32_t n ) {
 
 
 void sendPing() {
-    noInterrupts();
-    for (int i = 0; i < 4; i++) {
-        digitalWrite(53, HIGH);
-        wait_cycles(850);
-        digitalWrite(53, LOW);
-        wait_cycles(850);
-    }
-    interrupts();
+    // noInterrupts();
+    digitalWrite(53, HIGH);
+    wait_cycles(850);
+    digitalWrite(53, LOW);
+    wait_cycles(850);
+
+    digitalWrite(53, HIGH);
+    wait_cycles(850);
+    digitalWrite(53, LOW);
+    wait_cycles(850);
+
+    digitalWrite(53, HIGH);
+    wait_cycles(850);
+    // wait_cycles(300);
+    digitalWrite(53, LOW);
+    wait_cycles(850);
+    // interrupts();
 }
 
 
@@ -68,7 +77,7 @@ void loop()
 {
     sendPing();
     const auto start = micros();
-    delayMicroseconds(10);
+    // delayMicroseconds(10);
     uint16_t waveforms [g_numEnabledPins][g_samplesPerPin] = {0};
     readReceivers(waveforms);
     auto elapsed = micros() - start;
@@ -90,15 +99,17 @@ void loop()
     MY_SERIAL.print(" samples (us): ");
     MY_SERIAL.println(elapsed);
     
-    const auto num_bytes = g_samplesPerPin * g_numEnabledPins;
+    const auto num_bytes = g_samplesPerPin * 2;
     MY_SERIAL.write(reinterpret_cast<const byte*>(&num_bytes), 4);
-    MY_SERIAL.write(reinterpret_cast<byte*>(waveforms[0]), num_bytes);
-    MY_SERIAL.write(reinterpret_cast<byte*>(waveforms[1]), num_bytes);
+    MY_SERIAL.write(reinterpret_cast<const byte*>(&g_numEnabledPins), 4);
+    for (auto wave : waveforms) {
+        MY_SERIAL.write(reinterpret_cast<byte*>(wave), num_bytes);
+    }
 
     elapsed = micros() - start;
     MY_SERIAL.print("Time for complete read / send in us: ");
     MY_SERIAL.println(elapsed);
 
-    delay(20 > elapsed / 1000 ? 20 - elapsed / 1000 : 1);
+    delay(500 > elapsed / 1000 ? 500 - elapsed / 1000 : 1);
 }
 
